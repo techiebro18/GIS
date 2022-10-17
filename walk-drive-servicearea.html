@@ -1,0 +1,172 @@
+<!--
+
+To run this demo, you need to replace 'YOUR_API_KEY' with an API key from the ArcGIS Developers dashboard.
+
+Sign up for a free account and get an API key.
+
+https://developers.arcgis.com/documentation/mapping-apis-and-services/get-started/
+
+-->
+
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>ArcGIS API for JavaScript Tutorials: Find service areas</title>
+  <style>
+    html, body, #viewDiv {
+      padding: 0;
+      margin: 0;
+      height: 100%;
+      width: 100%;
+    }
+    #viewDiv {
+    }
+    .form-options {
+        width: 100%;
+        background-color: #ccc;
+        padding: 20px;
+    }
+    .items {
+        float: left;
+        margin-right: 20px;
+    }
+
+  </style>
+  <script src="https://code.jquery.com/jquery-3.6.1.min.js" integrity="sha256-o88AwQnZB+VDvE9tvIXrMQaPlFFSUTR+nldQm1LuPXQ=" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.24/esri/themes/light/main.css">
+  <script src="https://js.arcgis.com/4.24/"></script>
+  <script>
+    var clickpoint;
+    require([
+      "esri/config",
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/rest/serviceArea",
+      "esri/rest/support/ServiceAreaParameters",
+      "esri/rest/support/FeatureSet",
+      "esri/Graphic"
+    ], function(esriConfig,Map, MapView, serviceArea, ServiceAreaParams, FeatureSet, Graphic) {
+
+        
+        $(document).ready(function(){
+            $('.select-time').change(function(){
+                let time = $(this).val();
+                if(time != ''){
+                    clickHandler(clickpoint, time);
+                }
+            });
+        });
+
+      esriConfig.apiKey = "AAPK347f447777a04bb38266bf4e7000a3beZC8Ybrq3hDk_kKZsy4vR-pj79FsycmbFYKxh5bfy0-9YedemnqSUeHX-oKs0FyPz";
+
+      const map = new Map({
+        basemap: "arcgis-navigation"
+      });
+
+      const view = new MapView({
+        container: "viewDiv",
+        map: map,
+        center: [135.5023,34.6937], //Longitude, latitude
+        zoom: 9
+      });
+
+      const serviceAreaUrl = "https://route-api.arcgis.com/arcgis/rest/services/World/ServiceAreas/NAServer/ServiceArea_World/solveServiceArea";
+
+      view.on("click", function(event){
+
+        clickHandler(event);
+
+      });
+
+      function clickHandler(event, time=15) {
+        clickpoint = event;
+        const locationGraphic = createGraphic(event.mapPoint);
+
+        const driveTimeCutoffs = [time]; // Minutes
+        const serviceAreaParams = createServiceAreaParams(locationGraphic, driveTimeCutoffs, view.spatialReference);
+
+        solveServiceArea(serviceAreaUrl, serviceAreaParams);
+      }
+
+      // Create the location graphic
+      function createGraphic(point) {
+        view.graphics.removeAll();
+        const graphic = new Graphic({
+          geometry: point,
+          symbol: {
+            type: "simple-marker",
+            color: "white",
+            size: 8
+          }
+        });
+
+        view.graphics.add(graphic);
+        return graphic;
+      }
+
+      function createServiceAreaParams(locationGraphic, driveTimeCutoffs, outSpatialReference) {
+
+        // Create one or more locations (facilities) to solve for
+        const featureSet = new FeatureSet({
+          features: [locationGraphic]
+        });
+
+        // Set all of the input parameters for the service
+        const taskParameters = new ServiceAreaParams({
+          facilities: featureSet,
+          defaultBreaks: driveTimeCutoffs,
+          trimOuterPolygon: true,
+          outSpatialReference: outSpatialReference
+        });
+        return taskParameters;
+
+      }
+
+      function solveServiceArea(url, serviceAreaParams) {
+
+        return serviceArea.solve(url, serviceAreaParams)
+          .then(function(result){
+            if (result.serviceAreaPolygons.length) {
+              // Draw each service area polygon
+              result.serviceAreaPolygons.forEach(function(graphic){
+                graphic.symbol = {
+                  type: "simple-fill",
+                  color: "rgba(255,50,50,.25)"
+                }
+                view.graphics.add(graphic,0);
+              });
+            }
+          }, function(error){
+            console.log(error);
+          });
+
+      }
+
+    });
+  </script>
+
+</head>
+<body>
+    <div class="form-options">
+        <div class="items">
+            Type: 
+            <select class="form-select" >
+                <!-- <option value="">Select Type</option> -->
+                <option value="drive">Drive</option>
+            </select>
+        </div>
+        <div class="items">
+            Time: 
+            <select class="form-select select-time" >
+                <option value="">Select Time</option>
+                <option value="15" selected="selected">15 Minutes</option>
+                <option value="30">30 Minutes</option>
+                <option value="60">1 Hour</option>
+            </select>
+        </div>
+        <input type="button" class="submit" value="Submit" />
+    </div>
+  <div id="viewDiv"></div>
+</body>
+</html>
