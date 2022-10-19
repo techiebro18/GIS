@@ -1,0 +1,271 @@
+<!--
+
+To run this demo, you need to replace 'YOUR_API_KEY' with an API key from the ArcGIS Developers dashboard.
+
+Sign up for a free account and get an API key.
+
+https://developers.arcgis.com/documentation/mapping-apis-and-services/get-started/
+
+-->
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>ArcGIS Developer Guide: Find facts for a service area</title>
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+      .esri-view .esri-popup__button.esri-popup__button--dock {
+        display: none;
+      }
+      .esri-popup__header-title {
+        text-align: left;
+      }
+
+      .form-options {
+        width: 100%;
+        background-color: #ccc;
+        padding: 20px;
+        }
+        .items {
+            float: left;
+            margin-right: 20px;
+        }
+
+    </style>
+
+    <!-- require ArcGIS REST JS libraries from https://unpkg.com -->
+ <script src="https://unpkg.com/@esri/arcgis-rest-request@^4.0.0/dist/bundled/request.umd.js"></script>
+  <script src="https://unpkg.com/@esri/arcgis-rest-demographics@^4.0.0/dist/bundled/demographics.umd.js"></script>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.24/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.24"></script>
+
+    <script>
+      require([
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/geometry/Point",
+        "esri/Graphic",
+        "esri/rest/support/FeatureSet",
+        "esri/core/reactiveUtils",
+        "esri/config"
+      ],
+      (Map, MapView, Point, Graphic, FeatureSet, reactiveUtils, esriConfig)=> {
+
+        const apiKey = "YOUR_API_KEY";
+
+        esriConfig.apiKey = apiKey;
+
+        const authentication = arcgisRest.ApiKeyManager.fromKey(apiKey);
+
+        const start = new Point([-74.0060,40.7128]);  // New York
+        const zoom = 12;
+
+        let lastPoint;
+        let selectDataCollection;
+
+        const map = new Map({
+          basemap: "arcgis-streets-night"
+        });
+
+        const view = new MapView({
+          map: map,
+          center: start,
+          zoom: zoom,
+          container: "viewDiv",
+          constraints: {
+            snapToZoom: false
+          }
+        });
+
+        view.popup.actions = [];
+
+        view.when(() => {
+          lastPoint = view.center;
+
+          const elem = document.getElementById("selectContainer");
+          view.ui.add(elem, "top-right");
+
+          view.popup.dockEnabled = true;
+          view.popup.dockOptions = {
+            breakPoint: false,
+            buttonEnabled: false,
+            position: "bottom-right"
+          }
+
+          //Trigger request on dropdown change to display information
+          selectDataCollection = document.getElementById("selectDataCollection");
+          selectTime = document.getElementById("select-time");
+          
+          selectTime.addEventListener("change", refreshPopup);
+          selectDataCollection.addEventListener("change", refreshPopup);
+          
+          //Trigger request on page load
+          getDemographicData(lastPoint, selectDataCollection.value);
+        });
+
+        view.on("click", (e) => {
+          lastPoint = e.mapPoint;
+          getDemographicData(lastPoint, selectDataCollection.value, selectTime.value);
+        });
+
+        function refreshPopup(e) {
+          getDemographicData(lastPoint, selectDataCollection.value, selectTime.value);
+        }
+
+
+        function getDemographicData(point, dataCollection, time=15) {
+          if (!dataCollection) {
+            return;
+          }
+          // Request demographic data
+          arcgisRest.queryDemographicData({
+              studyAreas: [{ "geometry": { "x": point.longitude, "y": point.latitude } }],
+              authentication: authentication,
+              dataCollections: [dataCollection],
+              params: {"studyareasoptions": '{"areaType": "NetworkServiceArea", "bufferUnits": "Minutes", "bufferRadii": ['+time+'], "travel_mode": "Driving"}'},
+              returnGeometry: true
+            })
+            .then((response) => {
+              if (response.results[0].value.FeatureSet.length > 0 &&
+                response.results[0].value.FeatureSet[0].features.length > 0) {
+                const attributes = response.results[0].value.FeatureSet[0].features[0].attributes;
+                const geometry = response.results[0].value.FeatureSet[0].features[0].geometry;
+                drawGeometry(geometry);
+                showData(attributes, point, dataCollection);
+              } else {
+                console.log("No data found.");
+              }
+            });
+        }
+
+
+        function drawGeometry(geometry) {
+          const polygon = {
+            type: "polygon",
+            rings: geometry.rings
+          };
+
+          const simpleFillSymbol = {
+            type: "simple-fill",
+            color: [227, 139, 79, 0.5],  // orange, opacity 50%
+            outline: {
+              color: [227, 139, 79, 0.95],
+              width: 0.5
+            }
+          };
+
+          const polygonGraphic = new Graphic({
+            geometry: polygon,
+            symbol: simpleFillSymbol
+          });
+
+          view.graphics.removeAll();
+          view.graphics.add(polygonGraphic);
+        }
+
+        function showData (attributes, point, dataCollection) {
+          switch (dataCollection) {
+              case "householdincome":
+                title = "Household Income facts";
+                content = "Median Household Income " + formatMoney(attributes.MEDHINC_CY) +
+                "<br>" + "Average Household Income: " + formatMoney(attributes.AVGHINC_CY) +
+                "<br>" + "Per Capita Income: " + formatMoney(attributes.PCI_CY) +
+                "<br>" + "Aggregate Income: " + formatMoney(attributes.AGGINC_CY);
+                break;
+
+              case "entertainment":
+                title = "Entertainment facts";
+                content = "Tickets to Movies: " + formatMoney(attributes.X9078_X) +
+                "<br>" + "Streaming/Downloaded Audio: " + formatMoney(attributes.X9029_X) +
+                "<br>" + "Online Gaming Services: " + formatMoney(attributes.X9045_X) +
+                "<br>" + "Camping Equipment: " + formatMoney(attributes.X9054_X) +
+                "<br>" + "Books: " + formatMoney(attributes.X9068_X);
+                break;
+
+              case "PopulationTotals":
+                title = "Population facts";
+                content = "Total Population: " + attributes.TOTPOP_CY +
+                "<br>" + "Household Population: " + attributes.HHPOP_CY +
+                "<br>" + "Popluation Density (per sq. mile): " + attributes.POPDENS_CY +
+                "<br>" + "Population: Annual Growth Rate: " + attributes.POPGRW10CY +
+                "<br>" + "Housing Affordability Index: " + attributes.HAI_CY;
+                break;
+
+              case "businesses":
+                title = "Business facts";
+                content = "Total Businesses: " + attributes.S01_BUS +
+                "<br>" + "Manufacturing Businesses: " + attributes.S04_BUS +
+                "<br>" + "Food Store Businesses: " + attributes.S12_BUS +
+                "<br>" + "Communication Businesses: " + attributes.S06_BUS +
+                "<br>" + "Apparel/Accessory Businesses: " + attributes.S14_BUS +
+                "<br>" + "Movie/Amusement Businesses: " + attributes.S26_BUS +
+                "<br>" + "Auto Services - Businesses: " + attributes.S25_BUS;
+                break;
+
+              case "educationalattainment":
+                title = "Education facts";
+                content = "Age 25+ < 9th Grade: " + attributes.NOHS_CY +
+                "<br>" + "Age 25+ High School/No Diploma: " + attributes.SOMEHS_CY +
+                "<br>" + "Age 25+ High School Diploma: " + attributes.HSGRAD_CY +
+                "<br>" + "Age 25+ Associate's Degree: " + attributes.ASSCDEG_CY +
+                "<br>" + "Age 25+ Bachelor's Degree: " + attributes.BACHDEG_CY +
+                "<br>" + "Age 25+ Grad/Professional Degree " + attributes.GRADDEG_CY;
+                break;
+          }
+
+          view.popup.open({
+            location: point,
+            title: title,
+            content: content
+          });
+        }
+
+        function formatMoney(number) {
+            return number.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+        }
+
+      });
+  </script>
+  </head>
+  <body>
+    <div id="viewDiv"></div>
+    <div id="selectContainer" class="esri-widget">
+        <div class="form-options">
+            <div class="items">
+                Type: 
+                <select class="form-select" >
+                    <!-- <option value="">Select Type</option> -->
+                    <option value="drive">Drive</option>
+                </select>
+            </div>
+            <div class="items">
+                Time: 
+                <select id="select-time" class="form-select select-time" >
+                    <option value="">Select Time</option>
+                    <option value="15" selected="selected">15 Minutes</option>
+                    <option value="30">30 Minutes</option>
+                    <option value="60">1 Hour</option>
+                </select>
+            </div>
+            <input type="button" class="submit" value="" style="background-color: #ccc; border: none;"/>
+        </div>
+      <select id="selectDataCollection" class="esri-select esri-input" style="width: 220px; font-size: 16px;background-color: #CCC; margin: 5px;">
+        <option value="">Select a data collection...</option>
+        <option selected value="householdincome">Household Income</option>
+        <option value="entertainment">Entertainment</option>
+        <option value="PopulationTotals">Population Totals</option>
+        <option value="businesses">Businesses</option>
+        <option value="educationalattainment">Education</option>
+      </select>
+    </div>
+  </body>
+</html>
