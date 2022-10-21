@@ -60,7 +60,7 @@ https://developers.arcgis.com/documentation/mapping-apis-and-services/get-starte
       ],
       (Map, MapView, Point, Graphic, FeatureSet, reactiveUtils, esriConfig)=> {
 
-        const apiKey = "Your_Access_Token";
+        const apiKey = "ZDQhTumC2wF5yegRnjs7fY5kf6Y5VOGYnDYT7NPPHF4aV57BV4Sh5aC34YdBT8Rupo7iX-pXsq23OVmFWoTcTTYDWeCIO11oHzUZw29GGlqdCp2b5zthvqOpRGoex8xaLmSes19y9Qcogc2mfHTXEQ..";
 
         esriConfig.apiKey = apiKey;
 
@@ -73,7 +73,7 @@ https://developers.arcgis.com/documentation/mapping-apis-and-services/get-starte
         let selectDataCollection;
 
         const map = new Map({
-          basemap: "arcgis-streets-night"
+          basemap: "arcgis-navigation"
         });
 
         const view = new MapView({
@@ -111,7 +111,7 @@ https://developers.arcgis.com/documentation/mapping-apis-and-services/get-starte
           selectDataCollection.addEventListener("change", refreshPopup);
           
           //Trigger request on page load
-          getDemographicData(lastPoint, selectDataCollection.value);
+          //getDemographicData(lastPoint, selectDataCollection.value);
         });
 
         view.on("click", (e) => {
@@ -246,7 +246,7 @@ https://developers.arcgis.com/documentation/mapping-apis-and-services/get-starte
                 Type: 
                 <select id="select-mode" class="form-select" >
                     <!-- <option value="">Select Type</option> -->
-                    <option value="drive" selected="selected">Drive</option>
+                    <option value="Driving" selected="selected">Drive</option>
                     <option value="Walking">Walking</option>
                 </select>
             </div>
